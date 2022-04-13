@@ -8,11 +8,12 @@ It basically copies files from a specifically structured tar file into the syste
 Sample patches are changes in the UI in Lomiri and new features in the on-screen keyboard.
 
 ## Warning
-This tool offers convenience to the user but it doesn't mean it should be used by everyone. The processes done by the script is dangerous and could possibly break your system. Custom patches are not supported by Ubuntu Touch. Please only use this tool if you know what you are doing and/or you accept the risk of breaking your device's system. In case of breakage, you can use the [UBports Installer](https://devices.ubuntu-touch.io/installer/ "UBports Installer") to reflash your device without wiping (to retain all your data and apps) or whichever steps you did to flash your device with Ubuntu Touch.
-
-Please also use packages from trusted sources only. Checking the contents of the package is also highly recommended if you know your way around these things.
-
-Lastly, this script was created by a person with minimum bash scripting skills so beware 😆
+* This tool offers convenience to the user but it doesn't mean it should be used by everyone. The processes done by the script is dangerous and could possibly break your system. Custom patches are not supported by Ubuntu Touch.
+* Please only use this tool if you know what you are doing and/or you accept the risk of breaking your device's system. In case of breakage, you can use the [UBports Installer](https://devices.ubuntu-touch.io/installer/ "UBports Installer") to reflash your device without wiping (to retain all your data and apps) or whichever steps you did to flash your device with Ubuntu Touch.
+* Please use packages only from trusted sources. Checking the contents of the package is also highly recommended if you know your way around these things.
+* Compatibility check is simplistic and is NOT a sure thing since the script does not actually analyze the codes.
+* Installing multiple packages in one component is also NOT recommended since the script isn't capable of keeping track of installed packages and their compatibilities. You can still try but you are on your own 😄
+* Lastly, this script was created by a person with minimum bash scripting skills so beware 😆
 
 ## How to use
 1.  Download the whole repo (_sample_packages_ folder is optional)
@@ -56,6 +57,7 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. **tar.
    - _package_description_
       Contains the description of the package. Put anything here that coule be helpful to the user.
 	  New features, fixes and changes are the recommended contents.
+	  Use _\n_ to insert a new line
 	  
 	  Example: _This package adds a floating mode in the keyboard_
    - _custom_target_path_
@@ -73,6 +75,7 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. **tar.
 * **check**
  - Check if the package is compatible with the system
  - It checks if the original files in the package match the current system files.
+ - Compatibility is NOT a sure thing since the codes are not actually analyzed by the script.
  - Accepts _Package Name_ as argument
 
    Example: _jerk check Keyboard_Kugi_169.tar.gz_
