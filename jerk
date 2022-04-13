@@ -1,0 +1,758 @@
+#!/bin/bash
+
+
+# Constant values
+VERSION="1.0.0"
+BACKUP_SUFFIX=".JERKORIG"
+ORIG_FOLDERNAME="ORIG"
+MOD_FOLDERNAME="MOD"
+PASSWORD_PROMPT="A process needs root access. Please input your password: "
+CFG_FOLDER="components"
+
+# Initialize variables
+SCRIPT=$( basename "$0" )
+DEBUG_MODE=0
+VERBOSE_MODE=0
+FORCE_MODE=0
+SCRIPT_REMOUNTED_ROOTFS=0
+TARGET_COMPONENT_PROVIDED=0
+
+# Display version.
+function Version
+{
+    local txt=("$SCRIPT version $VERSION")
+
+    printf "%s\n" "${txt[@]}"
+}
+
+# Display Help
+function Help
+{
+   # Display Help
+   echo "Jerk is a tool for installing and uninstalling simple custom patches in an Ubuntu Touch system."
+   echo
+   echo "Usage: $SCRIPT <Options>[-h|V|v|f|d] <Command>[check|install|reset|uninstall|describe] <Package Name/Target Component>"
+   echo
+   echo "Commands:"
+   echo "check          Check if the package is compatible with your system"
+   echo "install        Install the current package to your system."
+   echo "reset          Revert all changes in the target path of the specified package or component."
+   echo "               Restores files using the '$BACKUP_SUFFIX' files."
+   echo "               New files installed by packages won't be removed"
+   echo "               'uninstall' is recommended for a cleaner uninstallation"
+   echo "               Valid components:"
+   echo "               "$(ls $CFG_FOLDER | sed 's/\.cfg$//')
+   echo "uninstall      Revert changes based on the files in the specified package."
+   echo "               Restore files using the '$BACKUP_SUFFIX' files."
+   echo "describe       Display details about the specified package if there's any."
+   echo "               This may include new features, fixes and changes implemented by the package"
+   echo
+   echo "Options:"
+   echo "--help, -h        Print help text."
+   echo "--version, -V     Print version."
+   echo "--verbose, -v     Verbose mode."
+   echo "--force, -f       Ignore incompatibilities and force installation"
+   echo "--debug, -d       Debug mode. Only log actions and no actual execution"
+   echo
+}
+
+# Display bad usage message
+function badUsage
+{
+    local message="$1"
+    local txt=("Run '$SCRIPT -h' or '$SCRIPT --help' to check for proper usage")
+
+    [[ $message ]] && printf "%s\\n" "$message"
+
+    printf "%s\\n" "${txt[@]}"
+}
+
+# Display debug message
+function showVerbose
+{
+    if [ ${VERBOSE_MODE} -eq 1 ] || [ ${DEBUG_MODE} -eq 1 ]; then
+        echo $1
+    fi
+}
+
+# Display debug message
+function showDebug
+{
+    if [ $DEBUG_MODE -eq 1 ]; then
+        echo $1
+    fi
+}
+
+############################################################
+# Main Program                                             #
+############################################################
+
+# Initialize values base from arguments/parameters
+function initializeValue
+{
+    showDebug "**Getting values from input***"
+    PROCESS_MODE=$1
+    PACKAGE_NAME=$2
+    declare -a ORIG_FILEPATHS_LIST
+    declare -a MOD_FILEPATHS_LIST
+    declare -a NEW_FILEPATHS_LIST
+}
+
+# Check if ran with sudo
+function checkIfSudo
+{
+    if [ "$EUID" -ne 0 ]; then
+        showDebug "Running as phablet"
+    else
+        echo "Please do NOT run as super user. The script will prompt you for sudo when needed."
+        exit 1
+    fi
+}
+
+# Checks if the system is already mounted writable (rw)
+function checkRootfsIfRW
+{
+    local current_status
+    local return_code=1
+
+    current_status="$(mount | grep ' on / ' | cut -d\( -f2 | cut -d, -f1)"
+
+    if [ "$current_status" = "ro" ]; then
+        return_code=0
+    else
+        return_code=1
+    fi
+    return $return_code
+}
+
+# Remounts the system to read-only (ro) or writable (rw)
+function remountRootfs
+{
+    local return_code
+
+    sudo -p "$PASSWORD_PROMPT" mount -o "${1}",remount /
+    return_code=$?
+
+    return $return_code
+}
+
+# Remount rootfs as writable if not yet
+function remountRootfsRWIfNecessary
+{
+    checkRootfsIfRW
+    if [ $? -eq 0 ]; then
+        showVerbose "System is read-only so switch to writable"
+        if [ $DEBUG_MODE -eq 0 ]; then
+            remountRootfs "rw"
+        fi
+        SCRIPT_REMOUNTED_ROOTFS=1
+    fi
+}
+
+# Remount rootfs as read-only if not yet
+function remountRootfsROIfNecessary
+{
+    checkRootfsIfRW
+    if [ $? -eq 1 ] && [ $SCRIPT_REMOUNTED_ROOTFS -eq 1 ]; then # only remount to ro if the script remounted it to rw
+        showVerbose "System is writable so switch to read-only"
+        if [ $DEBUG_MODE -eq 0 ]; then
+            remountRootfs "ro"
+        fi
+    fi
+}
+
+# Put MOD and ORIG files into arrays
+function listFiles
+{
+    showDebug "***Extracting list of ORIG and MOD files***"
+
+    local filename=""
+
+    # ORIG files
+    for file in $(tar -tf ${PACKAGE_NAME} ${ORIG_FOLDERNAME} | grep -e "[^/]$")
+    do
+        filename=$(echo $file | sed "s/"${ORIG_FOLDERNAME}"\///") #Remove top level directory
+        ORIG_FILEPATHS_LIST+=($filename)
+    done
+
+    # MOD files
+    for file in $(tar -tf ${PACKAGE_NAME} ${MOD_FOLDERNAME} | grep -e "[^/]$")
+    do
+        filename=$(echo $file | sed "s/"${MOD_FOLDERNAME}"\///") #Remove top level directory
+        MOD_FILEPATHS_LIST+=($filename)
+    done
+}
+
+# List files in MOD but not in ORIG
+function listNewFiles
+{
+    showDebug "***Extracting list of new files in MOD***"
+    
+    NEW_FILEPATHS_LIST=()
+    for i in "${MOD_FILEPATHS_LIST[@]}"; do
+        skip=
+        for j in "${ORIG_FILEPATHS_LIST[@]}"; do
+            [[ $i == $j ]] && { skip=1; break; }
+        done
+        [[ -n $skip ]] || NEW_FILEPATHS_LIST+=("$i")
+    done
+}
+
+# Check if there are files in ORIG but not in MOD
+function checkExtraFilesinORIG
+{
+    showDebug "***Checking if there are extra files in ORIG directory***"
+
+    local return_code=0
+
+    declare -a extra_filepaths_list
+    extra_filepaths_list=()
+    for i in "${ORIG_FILEPATHS_LIST[@]}"; do
+        skip=
+        for j in "${MOD_FILEPATHS_LIST[@]}"; do
+            [[ $i == $j ]] && { skip=1; break; }
+        done
+        [[ -n $skip ]] || extra_filepaths_list+=("$i")
+    done
+
+    if [ ${#extra_filepaths_list[@]} -eq 0 ]; then
+        return_code=0
+    else
+        return_code=1
+    fi
+
+    return $return_code
+}
+
+# Get config values of the specified component
+function getComponentConfigValues
+{
+    if [ $DEBUG_MODE -eq 0 ]; then
+        source "$CFG_FOLDER/$1.cfg" &> /dev/null
+    else
+        source "$CFG_FOLDER/$1.cfg"
+    fi
+}
+
+# Validate various input values
+function validateInput
+{
+    showDebug "***Validating inputs before proceeding***"
+
+    local return_code=1
+
+    if [ -n "$PROCESS_MODE" ] && [ -n "$PACKAGE_NAME" ]; then
+        if [ -f $PACKAGE_NAME ]; then
+            tar xf ${PACKAGE_NAME} "config" -O &> /dev/null
+            if [ $? -eq 0 ]; then # Get package config values
+                eval $(tar xf ${PACKAGE_NAME} "config" -O) # FIXME: Dangerous if package config file has malicious codes
+                if [[ -v target_component ]]; then # Check if target component was set in the package config
+                    getComponentConfigValues $target_component # Load config from the specified component
+                    if [ $? -eq 0 ]; then
+                        TARGET_PATH=$(echo $target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                    else
+                        echo "Invalid package. Unknown target component"
+                        exit 1
+                    fi
+                else # Otherwise, use custom target path if exists
+                    if [[ -v custom_target_path ]]; then
+                        TARGET_PATH=$(echo $custom_target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                    else
+                        echo "Invalid package. Target component/path is not set"
+                    fi
+                fi
+                
+                # Get package description if there's any
+                PACKAGE_DESC=$package_description
+
+                if [ -n "$TARGET_PATH" ]; then
+                    showDebug "Mode: $PROCESS_MODE"
+                    showDebug "Package Name: $PACKAGE_NAME"
+                    showDebug "Target Path: $TARGET_PATH"
+                    return_code=0
+                else
+                    echo "Invalid package. Config file incorrect"
+                    exit 1
+                fi
+            else
+                echo "Invalid package. Missing config file."
+                exit 1
+            fi
+        else
+            if [ "$PROCESS_MODE" = "reset" ]; then
+                getComponentConfigValues $PACKAGE_NAME # Load config from the specified component
+                if [ $? -eq 0 ]; then
+                    TARGET_PATH=$(echo $target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                else
+                    echo "Target component is invalid."
+                    echo "Valid values:"
+                    echo $(ls $CFG_FOLDER | sed 's/\.cfg$//')
+                    exit 1
+                fi
+
+                if [ -n "$TARGET_PATH" ]; then
+                    showDebug "Mode: $PROCESS_MODE"
+                    showDebug "Target Component: $PACKAGE_NAME"
+                    showDebug "Target Path: $TARGET_PATH"
+                    TARGET_COMPONENT_PROVIDED=1
+                    return_code=0
+                else
+                    echo "Script config error. Please report to the $SCRIPT developer"
+                    exit 1
+                fi
+            else
+                echo "Package file does not exist."
+                exit 1
+            fi
+        fi
+    else
+        badUsage "Error: Missing arguments"
+        exit 1
+    fi
+    
+    return ${return_code}
+}
+
+# Run post installation command if specified in the package
+function runPostInstall
+{
+    if [[ -v post_install ]]; then
+        read -p "Instalation requires to run a command to take effect (Command: $post_install). Run now? (y/Y): " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            showVerbose "Running post instalation command '$post_install' "
+            if [ $DEBUG_MODE -eq 0 ]; then
+                $post_install
+            fi
+        fi
+    fi
+}
+
+function checkIfFileExists
+{
+    showDebug "***Checking if files exists in the system***"
+    local return_code=0
+    local targetFilename=""
+    local passedArray=$1[@]
+    local arrayName=("${!passedArray}")
+
+    for file in "${arrayName[@]}"
+    do
+        targetFilename="$2/$file"
+        if [ ! -f "$targetFilename" ]; then
+            return_code=1
+            showVerbose "The file '$targetFilename' is missing in your system"
+        fi
+        
+    done
+    
+    return ${return_code}
+}
+
+# Check if package is compatible for installation in the current system
+function check_install_compat
+{
+    showDebug "***Checking install compatibility***"
+    local diff_count=0
+    local return_code=0
+
+    # Check if target path exists in the system
+    if [ ! -d "$TARGET_PATH" ]; then
+        let diff_count++
+        showVerbose "Target path of the package does not exists in your system."
+    else
+        # Loop through all files inside the ORIG directory
+        for file in "${ORIG_FILEPATHS_LIST[@]}"
+        do
+            # Compares ORIG files from the package to system files
+            tar xf ${PACKAGE_NAME} ${ORIG_FOLDERNAME}/${file} -O | cmp --silent ${TARGET_PATH}/${file}
+            if [ $? -eq 1 ]; then
+                let diff_count++
+                showVerbose "'${file}' is not compatible"
+            fi
+        done
+
+        # Check if the ORIG files exist in the system
+        checkIfFileExists ORIG_FILEPATHS_LIST $TARGET_PATH
+        
+        if [ $? -eq 1 ]; then
+            showDebug "Some files missing"
+            let diff_count++
+        else
+            showDebug "All files exists"
+        fi
+    fi
+
+    if [ "$diff_count" -gt "0" ]; then
+        let return_code=1
+    fi
+
+    showDebug "Incompatible: $return_code"
+    return ${return_code}
+}
+
+# Check if package is compatible for uninstallation in the current system
+function check_uninstall_compat
+{
+    showDebug "***Checking uninstall compatibility***"
+    local diff_count=0
+    local return_code=0
+
+    # Compare MOD files with system files. Expectation: Same file
+    for file in "${MOD_FILEPATHS_LIST[@]}"
+    do
+        tar xf ${PACKAGE_NAME} ${MOD_FOLDERNAME}/${file} -O | cmp --silent ${TARGET_PATH}/${file}
+        if [ $? -eq 1 ]; then
+            let diff_count++
+            showVerbose "'${file}' is not installed in your system or has been modified"
+        fi
+    done
+    
+    # Compare ORIG files with backup files. Expectation: Same file
+    for file in "${ORIG_FILEPATHS_LIST[@]}"
+    do
+        tar xf ${PACKAGE_NAME} ${ORIG_FOLDERNAME}/${file} -O | cmp --silent ${TARGET_PATH}/${file}${BACKUP_SUFFIX}
+        if [ $? -eq 1 ]; then
+            let diff_count++
+            showVerbose "Backup of '${file}' is not the same as the original file in the package"
+        fi
+    done
+    
+    # Check if all MOD files exists in the system
+    checkIfFileExists MOD_FILEPATHS_LIST $TARGET_PATH
+
+    if [ $? -eq 1 ]; then
+        showDebug "Some MOD files missing"
+        let diff_count++
+    else
+        showDebug "All files exists"
+    fi
+
+    if [ "$diff_count" -gt "0" ]; then
+        let return_code=1
+    fi
+    showDebug "Incompatible: $return_code"
+    return ${return_code}
+}
+
+function checkIfBackUpExists
+{
+    showDebug "***Checking if backup already exists***"
+    local return_code=0
+    local targetFilename=""
+
+    for file in "${ORIG_FILEPATHS_LIST[@]}"
+    do
+        targetFilename="$TARGET_PATH/$file$BACKUP_SUFFIX"
+        if [ -f "$targetFilename" ]; then
+            return_code=1
+            showVerbose "Backup file already exists: $targetFilename"
+        fi
+        
+    done
+    
+    return ${return_code}
+}
+
+# Backup system files as <FILENAME>$BACKUP_SUFFIX
+function backup_files
+{
+    local return_code=0
+    local sourceFilename=""
+    local targetFilename=""
+    local continueProcess=1
+
+    checkIfBackUpExists
+
+    if [ $? -eq 1 ]; then
+        read -p "Some backup files already exists in your system. These will be overwritten. Continue? (y/Y): " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            continueProcess=0
+        fi
+    else
+        continueProcess=0
+    fi
+
+    if [ $continueProcess -eq 0 ]; then
+        showDebug "***Backing up files***"
+
+        for file in "${ORIG_FILEPATHS_LIST[@]}"
+        do
+            sourceFilename=$TARGET_PATH/$file
+            targetFilename="$sourceFilename$BACKUP_SUFFIX"
+            showVerbose "Backing up $sourceFilename as $targetFilename"
+            if [ $DEBUG_MODE -eq 0 ]; then
+                sudo -p "$PASSWORD_PROMPT" cp $sourceFilename $targetFilename
+                return_code=$?
+            fi
+        done
+    else
+        echo "Process aborted."
+        exit 0
+    fi
+    
+    return ${return_code}
+}
+
+# Install package
+function install_package
+{
+    local return_code=0
+
+    backup_files
+
+    if [ $? -eq 0 ]; then
+        showDebug "***Installing $PACKAGE_NAME***"
+        if [ $DEBUG_MODE -eq 0 ]; then
+            sudo -p "$PASSWORD_PROMPT" tar -C ${TARGET_PATH} -xf ${PACKAGE_NAME} ${MOD_FOLDERNAME} --strip-components=1 # Strip top level when extracting
+            return_code=$?
+        fi
+    else
+        echo "Backing up files failed"
+        return_code=1
+    fi
+
+    return ${return_code}
+}
+
+# Uninstall package
+function uninstall_package
+{
+    local return_code=0
+    local sourceFilename=""
+    local targetFilename=""
+
+    showDebug "***Uninstalling package***"
+    for file in "${ORIG_FILEPATHS_LIST[@]}"
+    do
+        targetFilename=$TARGET_PATH/$file
+        sourceFilename="$targetFilename$BACKUP_SUFFIX"
+        showVerbose "Restoring $sourceFilename as $targetFilename"
+        if [ $DEBUG_MODE -eq 0 ]; then
+            sudo -p "$PASSWORD_PROMPT" mv $sourceFilename $targetFilename
+            return_code=$?
+        fi
+    done
+
+    # Get new files in MOD so we can delete them since they have no backup files
+    listNewFiles
+
+    for file in "${NEW_FILEPATHS_LIST[@]}"
+    do
+        targetFilename=$TARGET_PATH/$file
+        showVerbose "Deleting $targetFilename"
+        if [ $DEBUG_MODE -eq 0 ]; then
+            sudo -p "$PASSWORD_PROMPT" rm $targetFilename
+            return_code=$?
+        fi
+    done
+
+    return ${return_code}
+}
+
+# Restore all backup files in the specified path
+function reset_path
+{
+    declare -a backupfiles_list
+    local return_code=0
+    local sourceFilename=""
+    local targetFilename=""
+
+    backupfiles_list=()
+    while IFS=  read -r -d $'\0'; do
+        backupfiles_list+=("$REPLY")
+    done < <(find $1 -name "*${BACKUP_SUFFIX}" -print0)
+
+    if [ ${#backupfiles_list[@]} -eq 0 ]; then
+        echo "Nothing to reset"
+        exit 0
+    else
+        for file in "${backupfiles_list[@]}"
+        do
+            sourceFilename=$file
+            targetFilename=`echo $file | sed "s/"${BACKUP_SUFFIX}"*$//g"`
+            showVerbose "Restoring $sourceFilename as $targetFilename"
+            if [ $DEBUG_MODE -eq 0 ]; then
+                sudo -p "$PASSWORD_PROMPT" mv $sourceFilename $targetFilename
+                return_code=$?
+            fi
+        done
+    fi
+
+    return ${return_code}
+}
+
+## Process Options ##
+# Transform long options to short ones
+for arg in "$@"; do
+  shift
+  case "$arg" in
+    "--help") set -- "$@" "-h" ;;
+    "--verbose") set -- "$@" "-v" ;;
+    "--version")   set -- "$@" "-V" ;;
+    "--force")   set -- "$@" "-f" ;;
+    "--debug")   set -- "$@" "-d" ;;
+    *)        set -- "$@" "$arg"
+  esac
+done
+
+# Parse short options
+OPTIND=1
+while getopts ":hvVfd" opt
+do
+  case "$opt" in
+    "h") Help; exit 0 ;;
+    "V") Version; exit 0 ;;
+    "v") VERBOSE_MODE=1;;
+    "f") FORCE_MODE=1;;
+    "d") DEBUG_MODE=1;;
+    "?") badUsage "Error: Invalid option"; exit 1 ;;
+  esac
+done
+shift $(expr $OPTIND - 1) # remove options from positional parameters
+
+
+## Main Process Flow ##
+
+# Initialize values used in the program
+initializeValue $*
+
+# Check if ran with sudo, exit if yes
+checkIfSudo
+
+# Check if inputs are valid before proceeding
+validateInput
+
+if [ $? -eq 0 ]; then
+    if [ $TARGET_COMPONENT_PROVIDED -eq 0 ]; then # Only execute these when package name is provided instead of target component
+        # Extract list of ORIG and MOD files for later use
+        listFiles
+
+        # Check if there are files in ORIG not in MOD
+        checkExtraFilesinORIG
+        if [ $? -eq 1 ]; then
+            echo "Invalid package. Original files do not match modified files"
+            exit 1
+        fi
+    fi
+
+    # Parse command
+    case $PROCESS_MODE in
+        "check")
+            check_install_compat
+            SYS_INCOMPATIBLE=$?
+
+            if [ $SYS_INCOMPATIBLE -eq 1 ]; then
+                echo
+                echo "** Sorry, ${PACKAGE_NAME} is NOT compatible with your system **"
+                echo
+                echo "Your system is NOT the same version as this package is based on"
+                echo "OR"
+                echo "You already have an installed package. Multiple packages for the same component is NOT recommended"
+                echo "Run '$SCRIPT uninstall...' to restore original files from the specified package"
+                echo "Run '$SCRIPT reset...' to restore all files from the '$BACKUP_SUFFIX' files"
+                echo "OR"
+                echo "You are naughty and modified your system without using $SCRIPT"
+                echo "Run '$SCRIPT -f install...' to force installation but you're on your own :D"
+            else
+                echo "** Congratulations! ${PACKAGE_NAME} is compatible with your system **"
+                echo "Run '$SCRIPT install...' to install package"
+            fi
+
+            exit 0;;
+        "install")
+            check_install_compat
+            SYS_INCOMPATIBLE=$?
+
+            CONTINUE_INSTALL=0
+            if [ $SYS_INCOMPATIBLE -eq 1 ]; then
+                if [ $FORCE_MODE -eq 1 ]; then
+                    echo "Incompatible system"
+                    read -p "You are about to force installation despite incompatibility. Depending on the impacted component, your system may break and/or stop booting properly. Continue? (y/Y): " -r
+                    if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        showDebug "***Forcing Installation***"
+                        CONTINUE_INSTALL=1
+                    else
+                        echo "Process aborted."
+                        exit 0
+                    fi
+                else
+                    CONTINUE_INSTALL=0
+                    echo "Incompatible system. Cannot proceed. Run '$SCRIPT -v check...' for more details"
+                fi
+            else
+                CONTINUE_INSTALL=1
+            fi
+
+            if [ $CONTINUE_INSTALL -eq 1 ]; then
+                remountRootfsRWIfNecessary # rw rootfs is necessary
+                install_package
+                if [ $? -eq 0 ]; then
+                    echo "Installation has been completed successfully"
+
+                    runPostInstall # Run post installation command if any
+                else
+                    echo "Installation failed"
+                fi
+            fi;;
+        "uninstall")
+            check_uninstall_compat
+            SYS_INCOMPATIBLE=$?
+
+            CONTINUE_UNINSTALL=0
+            if [ $SYS_INCOMPATIBLE -eq 1 ]; then
+                if [ $FORCE_MODE -eq 1 ]; then
+                    echo "Package doesn't seem to be installed in your system or you modified some of its files"
+                    read -p "You are about to force uninstallation despite incompatibility. Depending on the impacted component, your system may break and/or stop booting properly. Continue? (y/Y): " -r
+                    if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        showDebug "***Forcing Uninstallation***"
+                        CONTINUE_UNINSTALL=1
+                    else
+                        echo "Process aborted."
+                        exit 0
+                    fi
+                else
+                    CONTINUE_UNINSTALL=0
+                    echo "This package is NOT installed in your system or some files were modified. Cannot proceed."
+                fi
+            else
+                CONTINUE_UNINSTALL=1
+            fi
+
+            if [ $CONTINUE_UNINSTALL -eq 1 ]; then
+                remountRootfsRWIfNecessary # rw rootfs is necessary
+                uninstall_package
+                if [ $? -eq 0 ]; then
+                    echo "Uninstallation has been completed successfully"
+
+                    runPostInstall # Run post installation command if any
+                else
+                    echo "Uninstallation failed"
+                fi
+            fi;;
+        "reset")
+            remountRootfsRWIfNecessary # rw rootfs is necessary
+            reset_path $TARGET_PATH
+            if [ $? -eq 0 ]; then
+                echo "Reset has been completed successfully"
+                runPostInstall # Run post installation command if any
+            else
+                echo "Reset failed"
+            fi;;
+        "describe")
+            if [ "$PACKAGE_DESC" = "" ]; then
+                echo "No package description"
+            else
+                echo -e $PACKAGE_DESC # Echo with \n as newline
+            fi;;
+         *)
+            badUsage "Unkown command: $PROCESS_MODE"
+            ;;
+    esac
+else
+    echo "There are unknown issues with your inputs"
+    exit 1
+fi
+
+remountRootfsROIfNecessary # Remount rootfs as read-only
+showDebug "Debug mode on. No actions committed"
+exit 0
