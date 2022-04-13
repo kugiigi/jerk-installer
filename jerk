@@ -35,7 +35,7 @@ function Help
    echo
    echo "Commands:"
    echo "check          Check if the package is compatible with your system"
-   echo "install        Install the current package to your system."
+   echo "install        Install the specified package to your system."
    echo "reset          Revert all changes in the target path of the specified package or component."
    echo "               Restores files using the '$BACKUP_SUFFIX' files."
    echo "               New files installed by packages won't be removed"
