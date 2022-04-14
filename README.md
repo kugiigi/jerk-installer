@@ -1,4 +1,4 @@
--# Jerk Installer
+# Jerk Installer
 First of all, this isn't the insult or malicious word.
 It is in homage to the wonderful software [Snap](https://en.wikipedia.org/wiki/Snap_(software)) and [Crackle](https://gitlab.com/tuxecure/crackle-apt/crackle) 😁 I also love physics! No, not really...... 😂
 
@@ -19,31 +19,31 @@ Sample patches are changes in the UI in Lomiri and new features in the on-screen
 
 ## How to use
 1.  Download the whole repo (_sample_packages_ folder is optional)
-2. Make sure **jerk** file is allowed to be executed as a program or executable.
+2. Make sure `jerk` file is allowed to be executed as a program or executable.
 3. Run `jerk check <Package Name/Path>` to check if the package is compatible to your system.
 4. Run `jerk install <Package Name/Path>` to directly install the package. Compatibility will still be checked but the result won't be as detailed as the `check` command.
-5. To uninstall, run `jerk uninstall <Package Name/Path>` or `jerk reset \<component name i.e. lomiri\>`
+5. To uninstall, run `jerk uninstall <Package Name/Path>` or `jerk reset <component name i.e. lomiri>`
 6. To unblock OTA updates, run `jerk unblock-ota` or `jerk reset all` to reset all known components and unblock OTA updates.
 
 See **Help** section for more details on how to use the script.
 
 ## How to create packages
-Packages are tar files in **gzip (tar.gz)** format. Only this format is known to work.
-We are limited to tar files that Ubuntu Touch can extract out of the box. **tar.xz** is  known to be NOT supported.
+Packages are tar files in `gzip (tar.gz)` format. Only this format is known to work.
+We are limited to tar files that Ubuntu Touch can extract out of the box. `tar.xz` is  known to be NOT supported.
 
 ### File structure
 #### Top Level
 * **ORIG** (Directory)
  - Contains all the vanilla/original files that will be modified by the package
- - All files in this directory should be present in the **MOD** directory otherwise, it'll be detected as invalid.
+ - All files in this directory should be present in the `MOD` directory otherwise, it'll be detected as invalid.
  - The files in this directory are used to determine compatibility so it's important that all files exactly match their original state.
- - Structure of the directory must be patterned with the **Target path**
+ - Structure of the directory must be patterned with the `Target path`
 * **MOD** (Directory)
  - Contains all the modified files that will be installed in the system
- - Make sure all modified files have their original files counterpart in the **ORIG** directory.
+ - Make sure all modified files have their original files counterpart in the `ORIG` directory.
  - New files, as expected, don't have original files counterpart.
- - Make sure ONLY actual new files have no counterpart in the **ORIG** directory, all files with no **ORIG** counterpart will be DELETED upon uninstallation which may cause system breakage if system files are deleted unexpectedly.
- - Structure of the directory must be patterned with the **Target path**
+ - Make sure ONLY actual new files have no counterpart in the `ORIG` directory, all files with no `ORIG` counterpart will be DELETED upon uninstallation which may cause system breakage if system files are deleted unexpectedly.
+ - Structure of the directory must be patterned with the `Target path`
 * **config** (File)
  - Contains configuration values of the package
  ##### Config values:
