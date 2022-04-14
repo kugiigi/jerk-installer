@@ -1,4 +1,4 @@
-# Jerk Installer
+-# Jerk Installer
 First of all, this isn't the insult or malicious word.
 It is in homage to the wonderful software [Snap](https://en.wikipedia.org/wiki/Snap_(software)) and [Crackle](https://gitlab.com/tuxecure/crackle-apt/crackle) 😁 I also love physics! No, not really...... 😂
 
@@ -13,14 +13,17 @@ Sample patches are changes in the UI in Lomiri and new features in the on-screen
 * Please use packages only from trusted sources. Checking the contents of the package is also highly recommended if you know your way around these things.
 * Compatibility check is simplistic and is NOT a sure thing since the script does not actually analyze the codes.
 * Installing multiple packages in one component is also NOT recommended since the script isn't capable of keeping track of installed packages and their compatibilities. You can still try but you are on your own 😄
+* Installing a package automatically blocks OTA updates to avoid users to install an update that may have conflict with the installed package(s). Running `jerk reset all` is highly recommended before installing an OTA update. Or run `jerk unblock-ota` to unblock OTA udpates.
+* Running via SSH is highly recommended so it is easy to reset in case of breakage especially when installing packages for Lomiri.
 * Lastly, this script was created by a person with minimum bash scripting skills so beware 😆
 
 ## How to use
 1.  Download the whole repo (_sample_packages_ folder is optional)
 2. Make sure **jerk** file is allowed to be executed as a program or executable.
-3. Run **jerk check <Package Name/Path>** to check if the package is compatible to your system.
-4. Run **jerk install <Package Name/Path>** to directly install the package. Compatibility will still be checked but the result won't be as detailed as the **check** command.
-5. To uninstall, run **jerk uninstall <Package Name/Path>** or **jerk reset \<component name i.e. lomiri\>**
+3. Run `jerk check <Package Name/Path>` to check if the package is compatible to your system.
+4. Run `jerk install <Package Name/Path>` to directly install the package. Compatibility will still be checked but the result won't be as detailed as the `check` command.
+5. To uninstall, run `jerk uninstall <Package Name/Path>` or `jerk reset \<component name i.e. lomiri\>`
+6. To unblock OTA updates, run `jerk unblock-ota` or `jerk reset all` to reset all known components and unblock OTA updates.
 
 See **Help** section for more details on how to use the script.
 
@@ -66,45 +69,57 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. **tar.
 
 ## Help
 ### Commands
+* **block-ota**
+  - Installs a package for the system settings app that blocks OTA updates
+  - This is to avoid installing an OTA update that can possibly have conflict with installed packages
+  - No argument needed
+
+    Example: `jerk block-ota`
 * **describe**
  -  Display details about the specified package if there's any.
   - This may include new features, fixes and changes implemented by the package
   - Accepts _Package Name_ as argument
 
-    Example: _jerk describe Keyboard_Kugi_169.tar.gz_
+    Example: `jerk describe Keyboard_Kugi_169.tar.gz`
 * **check**
  - Check if the package is compatible with the system
  - It checks if the original files in the package match the current system files.
  - Compatibility is NOT a sure thing since the codes are not actually analyzed by the script.
  - Accepts _Package Name_ as argument
 
-   Example: _jerk check Keyboard_Kugi_169.tar.gz_
+   Example: `jerk check Keyboard_Kugi_169.tar.gz`
 * **install**
  - Install the specified package to the system.
  - It also checks if the package is compatible to the system before proceeding.
  - System files are backed up with the extension _.JERKORIG_
  - Accepts _Package Name_ as argument
 
-   Example: _jerk install Keyboard_Kugi_169.tar.gz_
+   Example: `jerk install Keyboard_Kugi_169.tar.gz`
  
 * **reset**
  - Revert all changes in the target path of the specified package or component.
- - Restores files using the '$BACKUP_SUFFIX' files.
+ - Restores files using the `.JERKORIG` files.
  - New files installed by packages won't be removed
- - 'uninstall' is recommended for a cleaner uninstallation
- - Accepts _Package Name_ or _Component name_ as argument
+ - `uninstall` is recommended for a cleaner uninstallation
+ - `jerk reset all` will reset all known components
+ - Accepts _Package Name_ or _Component name_ or _all_ as argument
   - See **Config values** section for the list of valid component names or  _components_ folder for more up to date list
 
    Examples:
-   _jerk reset Keyboard_Kugi_169.tar.gz_
-   _jerk reset maliit-keyboard_
-  
+   `jerk reset Keyboard_Kugi_169.tar.gz`
+   `jerk reset maliit-keyboard`
+* **unblock-ota**
+  - Removes the package that blocks OTA updates
+  - This is only recommended if you're sure there's no more installed packages
+  - Running `jerk reset all` is recommended which also unblocks OTA updates
+
+     Example: `jerk unblock-ota`
 * **uninstall**
  - Revert changes based on the files in the specified package.
- - Restore files using the _.JERKORIG_ files.
+ - Restore files using the `.JERKORIG` files.
   - Accepts _Package Name_ as argument
   
-   Example: _jerk uninstall Keyboard_Kugi_169.tar.gz_
+   Example: `jerk uninstall Keyboard_Kugi_169.tar.gz`
    
 ### Options
 * **--help, -h**
@@ -114,7 +129,10 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. **tar.
 * **--verbose, -v**
  - Verbose mode.
  - Displays more details on what the script is doing
-* **"--force, -f**
+* **--say-yes, -y**
+ - Skip all prompts, if any, by saying yes to all.
+ - Be careful when using
+* **--force, -f**
  - Ignore incompatibilities and force installation or uninstallation
 * **--debug, -d**
  - Debug mode.
