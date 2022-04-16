@@ -34,38 +34,40 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. `tar.x
 ### File structure
 #### Top Level
 * **ORIG** (Directory)
- - Contains all the vanilla/original files that will be modified by the package
- - All files in this directory should be present in the `MOD` directory otherwise, it'll be detected as invalid.
- - The files in this directory are used to determine compatibility so it's important that all files exactly match their original state.
- - Structure of the directory must be patterned with the `Target path`
+  - Contains all the vanilla/original files that will be modified by the package
+  - All files in this directory should be present in the `MOD` directory otherwise, it'll be detected as invalid.
+  - The files in this directory are used to determine compatibility so it's important that all files exactly match their original state.
+  - Structure of the directory must be patterned with the `Target path`
 * **MOD** (Directory)
- - Contains all the modified files that will be installed in the system
- - Make sure all modified files have their original files counterpart in the `ORIG` directory.
- - New files, as expected, don't have original files counterpart.
- - Make sure ONLY actual new files have no counterpart in the `ORIG` directory, all files with no `ORIG` counterpart will be DELETED upon uninstallation which may cause system breakage if system files are deleted unexpectedly.
- - Structure of the directory must be patterned with the `Target path`
+  - Contains all the modified files that will be installed in the system
+  - Make sure all modified files have their original files counterpart in the `ORIG` directory.
+  - New files, as expected, don't have original files counterpart.
+  - Make sure ONLY actual new files have no counterpart in the `ORIG` directory, all files with no `ORIG` counterpart will be DELETED upon uninstallation which may cause system breakage if system files are deleted unexpectedly.
+  - Structure of the directory must be patterned with the `Target path`
 * **config** (File)
- - Contains configuration values of the package
- ##### Config values:
-   - _target_component_   
-         The name of the target component of the package.
-		 Components have pre-configured paths, post install command, etc.
-         Valid component names: (See _components_ folder for more up to date list)
-         -- bluetooth_conf (Bluetooth configuration)
-         -- device-configuration (Device configuration)
-         -- lomiri (Lomiri - Desktop Environment)
-        -- maliit-keyboard (On-screen Keyboard)
+  - Contains configuration values of the package
+    ##### Config values:
+    - _target_component_   
+         The name of the target component of the package.  
+		 Components have pre-configured paths, post install command, etc.  
+         Valid component names: (See _components_ folder for more up to date list)  
+          - bluetooth_conf (Bluetooth configuration)  
+          - device-configuration (Device configuration)  
+          - lomiri (Lomiri - Desktop Environment)  
+          - maliit-keyboard (On-screen Keyboard)
+          - system-settings (Settings App)
 		
-		Example: _lomiri_
-   - _package_description_
-      Contains the description of the package. Put anything here that coule be helpful to the user.
-	  New features, fixes and changes are the recommended contents.
-	  Use _\n_ to insert a new line
+		Example: `lomiri`
+    - _package_description_  
+        Contains the description of the package. Put anything here that coule be helpful to the user.  
+	    New features, fixes and changes are the recommended contents.  
+	    Use _\n_ to insert a new line  
 	  
-	  Example: _This package adds a floating mode in the keyboard_
-   - _custom_target_path_
-    Use this if the target component isn't in the pre-configured components yet or there are special reasons to do so.
-	Example: _/usr/share/unity8_
+	    Example: `This package adds a floating mode in the keyboard`
+    - _custom_target_path_  
+        Use this if the target component isn't in the pre-configured components yet or there are special reasons to do       so.  
+        
+	    Example: `/usr/share/unity8`
 
 ## Help
 ### Commands
@@ -74,67 +76,67 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. `tar.x
   - This is to avoid installing an OTA update that can possibly have conflict with installed packages
   - No argument needed
 
-    Example: `jerk block-ota`
+   Example: `jerk block-ota`
 * **describe**
- -  Display details about the specified package if there's any.
+  -  Display details about the specified package if there's any.
   - This may include new features, fixes and changes implemented by the package
   - Accepts _Package Name_ as argument
 
-    Example: `jerk describe Keyboard_Kugi_169.tar.gz`
+   Example: `jerk describe Keyboard_Kugi_169.tar.gz`
 * **check**
- - Check if the package is compatible with the system
- - It checks if the original files in the package match the current system files.
- - Compatibility is NOT a sure thing since the codes are not actually analyzed by the script.
- - Accepts _Package Name_ as argument
+  - Check if the package is compatible with the system
+  - It checks if the original files in the package match the current system files.
+  - Compatibility is NOT a sure thing since the codes are not actually analyzed by the script.
+  - Accepts _Package Name_ as argument
 
    Example: `jerk check Keyboard_Kugi_169.tar.gz`
 * **install**
- - Install the specified package to the system.
- - It also checks if the package is compatible to the system before proceeding.
- - System files are backed up with the extension _.JERKORIG_
- - Accepts _Package Name_ as argument
+  - Install the specified package to the system.
+  - It also checks if the package is compatible to the system before proceeding.
+  - System files are backed up with the extension _.JERKORIG_
+  - Accepts _Package Name_ as argument
 
    Example: `jerk install Keyboard_Kugi_169.tar.gz`
  
 * **reset**
- - Revert all changes in the target path of the specified package or component.
- - Restores files using the `.JERKORIG` files.
- - New files installed by packages won't be removed
- - `uninstall` is recommended for a cleaner uninstallation
- - `jerk reset all` will reset all known components
- - Accepts _Package Name_ or _Component name_ or _all_ as argument
+  - Revert all changes in the target path of the specified package or component.
+  - Restores files using the `.JERKORIG` files.
+  - New files installed by packages won't be removed
+  - `uninstall` is recommended for a cleaner uninstallation
+  - `jerk reset all` will reset all known components
+  - Accepts _Package Name_ or _Component name_ or _all_ as argument
   - See **Config values** section for the list of valid component names or  _components_ folder for more up to date list
 
-   Examples:
-   `jerk reset Keyboard_Kugi_169.tar.gz`
+   Examples:  
+   `jerk reset Keyboard_Kugi_169.tar.gz`  
    `jerk reset maliit-keyboard`
 * **unblock-ota**
   - Removes the package that blocks OTA updates
   - This is only recommended if you're sure there's no more installed packages
   - Running `jerk reset all` is recommended which also unblocks OTA updates
 
-     Example: `jerk unblock-ota`
+   Example: `jerk unblock-ota`
 * **uninstall**
- - Revert changes based on the files in the specified package.
- - Restore files using the `.JERKORIG` files.
+  - Revert changes based on the files in the specified package.
+  - Restore files using the `.JERKORIG` files.
   - Accepts _Package Name_ as argument
   
    Example: `jerk uninstall Keyboard_Kugi_169.tar.gz`
    
 ### Options
 * **--help, -h**
- - Print help text.
+  - Print help text.
 * **--version, -V**
- - Print version of the script.
+  - Print version of the script.
 * **--verbose, -v**
- - Verbose mode.
- - Displays more details on what the script is doing
+  - Verbose mode.
+  - Displays more details on what the script is doing
 * **--say-yes, -y**
- - Skip all prompts, if any, by saying yes to all.
- - Be careful when using
+  - Skip all prompts, if any, by saying yes to all.
+  - Be careful when using
 * **--force, -f**
- - Ignore incompatibilities and force installation or uninstallation
+  - Ignore incompatibilities and force installation or uninstallation
 * **--debug, -d**
- - Debug mode.
- - Verbose and display more things
- - Actions are not committed
+  - Debug mode.
+  - Verbose and display more things
+  - Actions are not committed
