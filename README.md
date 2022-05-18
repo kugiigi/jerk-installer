@@ -54,7 +54,7 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. `tar.x
           - bluetooth_conf (Bluetooth configuration)  
           - device-configuration (Device configuration)  
           - lomiri (Lomiri - Desktop Environment)  
-          - maliit-keyboard (On-screen Keyboard)
+          - maliit-keyboard (On-screen Keyboard)  
           - system-settings (Settings App)
 		
 		Example: `lomiri`
