@@ -17,13 +17,61 @@ Sample patches are changes in the UI in Lomiri and new features in the on-screen
 * Running via SSH is highly recommended so it is easy to reset in case of breakage especially when installing packages for Lomiri.
 * Lastly, this script was created by a person with minimum bash scripting skills so beware 😆
 
+
 ## How to use
-1.  Download the whole repo (_sample_packages_ folder is optional)
-2. Make sure `jerk` file is allowed to be executed as a program or executable.
-3. Run `jerk check <Package Name/Path>` to check if the package is compatible to your system.
-4. Run `jerk install <Package Name/Path>` to directly install the package. Compatibility will still be checked but the result won't be as detailed as the `check` command.
-5. To uninstall, run `jerk uninstall <Package Name/Path>` or `jerk reset <component name i.e. lomiri>`
-6. To unblock OTA updates, run `jerk unblock-ota` or `jerk reset all` to reset all known components and unblock OTA updates.
+### Installation
+#### A. Download Repo
+
+1. Download the whole repo (_sample_packages_ folder is optional) by cloning or downloading as a zip file.
+2. Set the `jerk` file as executable. (i.e. `chmod +x jerk`)
+3. Run the script with `./jerk <arguments/command/parameters>`. Make sure you are in the correct directory where the script is.
+
+#### B. Install as Binary
+1. Download the [latest release](https://github.com/kugiigi/jerk-installer/releases/latest/download/jerk.zip). Or you can run the command  
+ `wget https://github.com/kugiigi/jerk-installer/releases/latest/download/jerk.zip -O <Path to save>`
+ 
+ 	Example:  
+ `wget https://github.com/kugiigi/jerk-installer/releases/latest/download/jerk.zip -O ~/Downloads/jerk.zip`
+2. Run the following commands
+	```
+	unzip <Path of downloaded file>/jerk.zip -d ~/jerk
+	~/jerk/jerk setup
+	```
+
+	Example:
+	```
+	unzip ~/Downloads/jerk.zip -d ~/jerk
+	~/jerk/jerk setup
+	```
+3. Run the script with `jerk <arguments/command/parameters>`. You can run it this way regardless of the current directory since it's a registered command.
+4. To uninstall, run the following.
+	```
+	source ~/.local/lib/crackle/jerk
+	remove_jerk
+	```
+
+### Basic Usage
+#### Check Compatibility
+- You can check first if the package is compatible with your system or not.  
+`jerk check <Package Name/Path>`
+#### Install Package
+- Compatibility will still be checked but the result won't be as detailed as the `check` command.  
+`jerk install <Package Name/Path>`. 
+- Sample packages are included in this repo which you can test or experiment with.
+- Packages I maintain can also be used and they can be accessed in this [repo](https://github.com/kugiigi/jerk-packages).
+#### Uninstall Package
+- You can uninstall packages individually with the command below  
+`jerk uninstall <Package Name/Path>`
+- You can also reset a whole component but this will retain new files that were installed.  
+`jerk reset <component name i.e. lomiri, all (resets all components)>`  
+_** Use `uninstall` for a cleaner removal of packages._
+#### Unblock OTA Updates
+- OTA updates will be blocked after installing at least one package.
+- It will not be unblocked even after uninstalling installed packages.
+- To unblock, run the following.  
+`jerk unblock-ota`
+- Or you can reset all components which will automatically unblock OTA updates.  
+`jerk reset all`
 
 See **Help** section for more details on how to use the script.
 
@@ -54,7 +102,7 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. `tar.x
           - bluetooth_conf (Bluetooth configuration)  
           - device-configuration (Device configuration)  
           - lomiri (Lomiri - Desktop Environment)  
-          - maliit-keyboard (On-screen Keyboard)
+          - maliit-keyboard (On-screen Keyboard)  
           - system-settings (Settings App)
 		
 		Example: `lomiri`
@@ -140,3 +188,4 @@ We are limited to tar files that Ubuntu Touch can extract out of the box. `tar.x
   - Debug mode.
   - Verbose and display more things
   - Actions are not committed
+
