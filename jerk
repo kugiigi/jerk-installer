@@ -11,9 +11,10 @@ FORCE_MODE=0
 SCRIPT_REMOUNTED_ROOTFS=0
 TARGET_COMPONENT_PROVIDED=0
 SAY_YES_MODE=0
+INSTALLED_AS_BIN=0
 
 # Constant values
-VERSION="1.0.2"
+VERSION="1.0.3"
 BACKUP_SUFFIX=".JERKORIG"
 ORIG_FOLDERNAME="ORIG"
 MOD_FOLDERNAME="MOD"
@@ -621,6 +622,27 @@ for arg in "$@"; do
   esac
 done
 
+# Check and set script's required directories and files
+CFG_FOLDER="components"
+BLOCK_OTA_PKG="BlockOTA.jerk"
+
+# Adjust required directories/files depending where script is installed
+if [ ! -d "$CFG_FOLDER" ]; then # Check if config folder is in the same directory as the script
+    CFG_FOLDER="$XDG_CONFIG/jerk/components"
+    if [ ! -d "$CFG_FOLDER" ]; then # Check if config folder is installed in the standard home config directory
+        echo "Config folder does not exist in the system. Try to redownload/reinstall $SCRIPT"
+        exit 1
+    fi
+fi
+
+if [ ! -f "$BLOCK_OTA_PKG" ]; then # Check if Block OTA package is in the same directory as the script
+    BLOCK_OTA_PKG="$XDG_DATA/jerk/BlockOTA.jerk"
+    if [ ! -f "$BLOCK_OTA_PKG" ]; then # Check if Block OTA package is installed in the standard home data directory
+        echo "BlockOTA package does not exist in the system. Try to redownload/reinstall $SCRIPT"
+        exit 1
+    fi
+fi
+
 # Parse short options
 OPTIND=1
 while getopts ":hvVfdy" opt
@@ -646,28 +668,14 @@ initializeValue $*
 # Check if ran with sudo, exit if yes
 checkIfSudo
 
-# Check and set script's required directories and files
-CFG_FOLDER="components"
-BLOCK_OTA_PKG="BlockOTA.jerk"
-
-# Adjust required directories/files depending where script is installed
-if [ ! -d "$CFG_FOLDER" ]; then # Check if config folder is in the same directory as the script
-    CFG_FOLDER="$XDG_CONFIG/jerk/components"
-    if [ ! -d "$CFG_FOLDER" ]; then # Check if config folder is installed in the standard home config directory
-        echo "Config folder does not exist in the system. Try to redownload/reinstall $SCRIPT"
-        exit 1
-    fi
+# Check if installed as binary (default is standalone script)
+if command -v $SCRIPT &> /dev/null
+then
+    INSTALLED_AS_BIN=1
 fi
 
-if [ ! -f "$BLOCK_OTA_PKG" ]; then # Check if Block OTA package is in the same directory as the script
-    BLOCK_OTA_PKG="$XDG_DATA/jerk/BlockOTA.jerk"
-    if [ ! -f "$BLOCK_OTA_PKG" ]; then # Check if Block OTA package is installed in the standard home data directory
-        echo "BlockOTA package does not exist in the system. Try to redownload/reinstall $SCRIPT"
-        exit 1
-    fi
-fi
 
-# Overwrite
+# Overwrite package name when blocking/unblocking OTA
 if [ "$PROCESS_MODE" = "block-ota" ] || [ "$PROCESS_MODE" = "unblock-ota" ]; then
     PACKAGE_NAME=$BLOCK_OTA_PKG
 fi
@@ -751,7 +759,12 @@ if [ $? -eq 0 ]; then
                     
                     showDebug "Blocking OTA updates"
                     if [ $DEBUG_MODE -eq 0 ]; then
-                        ./$SCRIPT --say-yes block-ota &>/dev/null
+                        if [ $INSTALLED_AS_BIN -eq 0 ]; then
+                            ./$SCRIPT --say-yes block-ota &>/dev/null
+                        else
+                            $SCRIPT --say-yes block-ota &>/dev/null
+                        fi
+
                         if [ $? -eq 0 ]; then
                             echo "OTA updates have been blocked. Run '$SCRIPT unblock-ota' to enable OTA updates again."
                         fi
@@ -805,10 +818,14 @@ if [ $? -eq 0 ]; then
                 packages_to_reset=($CFG_FOLDER/*)
                 for package in "${packages_to_reset[@]}"
                 do
-                    component_to_reset=$(echo "$package" | sed "s/"${CFG_FOLDER}"\///" | sed 's/\.cfg$//') # Remove top level and file extension
+                    component_to_reset=$(basename $package | sed 's/\.cfg$//') # Only get file name without the extension
                     echo "Resetting $component_to_reset"
                     if [ $DEBUG_MODE -eq 0 ]; then
-                        ./$SCRIPT reset $component_to_reset
+                        if [ $INSTALLED_AS_BIN -eq 0 ]; then
+                            ./$SCRIPT reset $component_to_reset
+                        else
+                            $SCRIPT reset $component_to_reset
+                        fi
                     fi
                 done
 
