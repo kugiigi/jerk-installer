@@ -14,7 +14,7 @@ SAY_YES_MODE=0
 INSTALLED_AS_BIN=0
 
 # Constant values
-VERSION="1.0.3"
+VERSION="1.0.4"
 BACKUP_SUFFIX=".JERKORIG"
 ORIG_FOLDERNAME="ORIG"
 MOD_FOLDERNAME="MOD"
@@ -375,6 +375,7 @@ function check_install_compat
 {
     showDebug "***Checking install compatibility***"
     local diff_count=0
+    local mod_diff_count=0
     local return_code=0
 
     # Check if target path exists in the system
@@ -382,6 +383,7 @@ function check_install_compat
         let diff_count++
         showVerbose "Target path of the package does not exists in your system."
     else
+        echo "Comparing Package's Original files to target system files"
         # Loop through all files inside the ORIG directory
         for file in "${ORIG_FILEPATHS_LIST[@]}"
         do
@@ -392,6 +394,8 @@ function check_install_compat
                 showVerbose "'${file}' is not compatible"
             fi
         done
+
+        echo "Number of files NOT compatible: " $diff_count
 
         # Check if the ORIG files exist in the system
         checkIfFileExists ORIG_FILEPATHS_LIST $TARGET_PATH
@@ -406,6 +410,27 @@ function check_install_compat
 
     if [ "$diff_count" -gt "0" ]; then
         let return_code=1
+    fi
+
+    if [ $return_code -eq 1 ]; then
+        echo -e "\nComparing Package's Modified files to Target system files"
+        # Loop through all files inside the MOD directory
+        for file in "${MOD_FILEPATHS_LIST[@]}"
+        do
+            # Compares MOD files from the package to system files
+            tar xf ${PACKAGE_NAME} ${MOD_FOLDERNAME}/${file} -O | cmp --silent ${TARGET_PATH}/${file}
+            if [ $? -eq 1 ]; then
+                let mod_diff_count++
+                showVerbose "'${file}' is NOT installed yet"
+            else
+                showVerbose "'${file}' is already installed"
+            fi
+        done
+        echo "Number of files NOT installed yet : " $mod_diff_count
+
+        if [ $mod_diff_count -eq 0 ]; then
+            echo "This package seems to be already installed to your system"
+        fi
     fi
 
     showDebug "Incompatible: $return_code"
