@@ -388,7 +388,7 @@ function check_install_compat
         let diff_count++
         showVerbose "Target path of the package does not exists in your system."
     else
-        echo "Comparing Package's Original files to target system files"
+        showVerbose "Comparing Package's Original files to target system files"
         # Loop through all files inside the ORIG directory
         for file in "${ORIG_FILEPATHS_LIST[@]}"
         do
@@ -402,7 +402,7 @@ function check_install_compat
             fi
         done
 
-        echo "Number of files NOT compatible: " $diff_count / $orig_count
+        showVerbose "Number of files NOT compatible: " $diff_count / $orig_count
 
         # Check if the ORIG files exist in the system
         checkIfFileExists ORIG_FILEPATHS_LIST $TARGET_PATH
