@@ -33,7 +33,7 @@ jobs:
           pkg_directories: bin config share
           bin: jerk
           config: components
-          data_directory: BlockOTA.jerk BlockOTA_focal.jerk
+          data_directory: packages
           package_name: jerk
 
       - name: setup release
