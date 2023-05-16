@@ -407,7 +407,7 @@ function check_install_compat
     # Check if target path exists in the system
     if [ ! -d "$TARGET_PATH" ]; then
         let diff_count++
-        showVerbose "Target path of the package does not exists in your system.$TARGET_PATH"
+        showVerbose "Target path of the package does not exists in your system ($TARGET_PATH)"
     else
         showVerbose "Comparing Package's Original files to target system files"
         # Loop through all files inside the ORIG directory
@@ -685,9 +685,9 @@ done
 # Check and set script's required directories and files
 CFG_FOLDER="components"
 case "$SYSTEM_RELEASE_VERSION" in
-    "16.04") BLOCK_OTA_PKG="BlockOTA.jerk" ;;
-    "20.04") BLOCK_OTA_PKG="BlockOTA_focal.jerk" ;;
-    *) BLOCK_OTA_PKG="BlockOTA.jerk" ;;
+    "16.04") BLOCK_OTA_PKG="packages/BlockOTA.jerk" ;;
+    "20.04") BLOCK_OTA_PKG="packages/BlockOTA_focal.jerk" ;;
+    *) BLOCK_OTA_PKG="packages/BlockOTA.jerk" ;;
 esac
 
 # Adjust required directories/files depending where script is installed
@@ -701,9 +701,9 @@ fi
 
 if [ ! -f "$BLOCK_OTA_PKG" ]; then # Check if Block OTA package is in the same directory as the script
     case "$SYSTEM_RELEASE_VERSION" in
-        "16.04") BLOCK_OTA_PKG="$XDG_DATA/jerk/BlockOTA.jerk" ;;
-        "20.04") BLOCK_OTA_PKG="$XDG_DATA/jerk/BlockOTA_focal.jerk" ;;
-        *) BLOCK_OTA_PKG="$XDG_DATA/jerk/BlockOTA.jerk" ;;
+        "16.04") BLOCK_OTA_PKG="$XDG_DATA/jerk/packages/BlockOTA.jerk" ;;
+        "20.04") BLOCK_OTA_PKG="$XDG_DATA/jerk/packages/BlockOTA_focal.jerk" ;;
+        *) BLOCK_OTA_PKG="$XDG_DATA/jerk/packages/BlockOTA.jerk" ;;
     esac
     if [ ! -f "$BLOCK_OTA_PKG" ]; then # Check if Block OTA package is installed in the standard home data directory
         echo "BlockOTA package does not exist in the system. Try to redownload/reinstall $SCRIPT"
