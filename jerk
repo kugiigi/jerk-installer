@@ -13,9 +13,10 @@ TARGET_COMPONENT_PROVIDED=0
 SAY_YES_MODE=0
 INSTALLED_AS_BIN=0
 SYSTEM_RELEASE_VERSION="$(lsb_release -rs)"
+SYSTEM_ARCH="$(uname -m)"
 
 # Constant values
-VERSION="1.0.6"
+VERSION="1.0.7"
 BACKUP_SUFFIX=".JERKORIG"
 ORIG_FOLDERNAME="ORIG"
 MOD_FOLDERNAME="MOD"
@@ -266,9 +267,27 @@ function validateInput
                     getComponentConfigValues $target_component # Load config from the specified component
                     if [ $? -eq 0 ]; then
                         case "$SYSTEM_RELEASE_VERSION" in
-                            "16.04") TARGET_PATH=$(echo $target_path | sed 's/\/$//') ;; # Last "/" is removed if there's any
-                            "20.04") TARGET_PATH=$(echo $focal_target_path | sed 's/\/$//') ;; # Last "/" is removed if there's any
-                            *) TARGET_PATH=$(echo $target_path | sed 's/\/$//') ;; # Last "/" is removed if there's any
+                            "16.04")
+                                if [ "$SYSTEM_ARCH" != "aarch64" ] && [[ -v armhf_target_path ]]; then # If armhf (32-bit) and has config for it
+                                    TARGET_PATH=$(echo $armhf_target_path | sed 's/\/$//')
+                                else # if arm64 (64-bit)
+                                    TARGET_PATH=$(echo $target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                                fi
+                                ;;
+                            "20.04")
+                                if [ "$SYSTEM_ARCH" != "aarch64" ] && [[ -v armhf_focal_target_path ]]; then # If armhf (32-bit) and has config for it
+                                    TARGET_PATH=$(echo $armhf_focal_target_path | sed 's/\/$//')
+                                else # if arm64 (64-bit)
+                                    TARGET_PATH=$(echo $focal_target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                                fi
+                                ;;
+                            *)
+                                if [ "$SYSTEM_ARCH" != "aarch64" ] && [[ -v armhf_target_path ]]; then # If armhf (32-bit) and has config for it
+                                    TARGET_PATH=$(echo $armhf_target_path | sed 's/\/$//')
+                                else # if arm64 (64-bit)
+                                    TARGET_PATH=$(echo $target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                                fi
+                                ;;
                         esac
                     else
                         echo "Invalid package. Unknown target component"
@@ -309,9 +328,27 @@ function validateInput
                     getComponentConfigValues $PACKAGE_NAME # Load config from the specified component
                     if [ $? -eq 0 ]; then
                         case "$SYSTEM_RELEASE_VERSION" in
-                            "16.04") TARGET_PATH=$(echo $target_path | sed 's/\/$//') ;; # Last "/" is removed if there's any
-                            "20.04") TARGET_PATH=$(echo $focal_target_path | sed 's/\/$//') ;; # Last "/" is removed if there's any
-                            *) TARGET_PATH=$(echo $target_path | sed 's/\/$//') ;; # Last "/" is removed if there's any
+                            "16.04")
+                                if [ "$SYSTEM_ARCH" != "aarch64" ] && [[ -v armhf_target_path ]]; then # If armhf (32-bit) and has config for it
+                                    TARGET_PATH=$(echo $armhf_target_path | sed 's/\/$//')
+                                else # if arm64 (64-bit)
+                                    TARGET_PATH=$(echo $target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                                fi
+                                ;;
+                            "20.04")
+                                if [ "$SYSTEM_ARCH" != "aarch64" ] && [[ -v armhf_focal_target_path ]]; then # If armhf (32-bit) and has config for it
+                                    TARGET_PATH=$(echo $armhf_focal_target_path | sed 's/\/$//')
+                                else # if arm64 (64-bit)
+                                    TARGET_PATH=$(echo $focal_target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                                fi
+                                ;;
+                            *)
+                                if [ "$SYSTEM_ARCH" != "aarch64" ] && [[ -v armhf_target_path ]]; then # If armhf (32-bit) and has config for it
+                                    TARGET_PATH=$(echo $armhf_target_path | sed 's/\/$//')
+                                else # if arm64 (64-bit)
+                                    TARGET_PATH=$(echo $target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                                fi
+                                ;;
                         esac
                     else
                         echo "Target component is invalid."
