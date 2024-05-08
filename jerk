@@ -456,11 +456,13 @@ function check_install_compat
             if [ $? -eq 1 ]; then
                 let diff_count++
                 let inc_count++
-                showVerbose "'${file}' is not compatible"
+                showVerbose "'${file}' is NOT compatible"
+            else
+                showVerbose "'${file}' is compatible"
             fi
         done
 
-        showVerbose "Number of files NOT compatible: " $diff_count / $orig_count
+        showVerbose "Number of files NOT compatible: $diff_count / $orig_count"
 
         # Check if the ORIG files exist in the system
         checkIfFileExists ORIG_FILEPATHS_LIST $TARGET_PATH
@@ -490,8 +492,8 @@ function check_install_compat
                 if [ $? -eq 1 ]; then
                     let mod_diff_count++
                     showVerbose "'${file}' is NOT installed yet"
-                else
-                    showVerbose "'${file}' is already installed"
+                #~ else
+                    #~ showVerbose "'${file}' is already installed"
                 fi
             else
                 let mod_diff_count++
