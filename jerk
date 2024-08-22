@@ -283,9 +283,9 @@ function validateInput
                                 ;;
                             *)
                                 if [ "$SYSTEM_ARCH" != "aarch64" ] && [[ -v armhf_target_path ]]; then # If armhf (32-bit) and has config for it
-                                    TARGET_PATH=$(echo $armhf_target_path | sed 's/\/$//')
+                                    TARGET_PATH=$(echo $armhf_focal_target_path | sed 's/\/$//')
                                 else # if arm64 (64-bit)
-                                    TARGET_PATH=$(echo $target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                                    TARGET_PATH=$(echo $focal_target_path | sed 's/\/$//') # Last "/" is removed if there's any
                                 fi
                                 ;;
                         esac
@@ -344,9 +344,9 @@ function validateInput
                                 ;;
                             *)
                                 if [ "$SYSTEM_ARCH" != "aarch64" ] && [[ -v armhf_target_path ]]; then # If armhf (32-bit) and has config for it
-                                    TARGET_PATH=$(echo $armhf_target_path | sed 's/\/$//')
+                                    TARGET_PATH=$(echo $armhf_focal_target_path | sed 's/\/$//')
                                 else # if arm64 (64-bit)
-                                    TARGET_PATH=$(echo $target_path | sed 's/\/$//') # Last "/" is removed if there's any
+                                    TARGET_PATH=$(echo $focal_target_path | sed 's/\/$//') # Last "/" is removed if there's any
                                 fi
                                 ;;
                         esac
@@ -389,20 +389,20 @@ function runPostInstall
             case "$SYSTEM_RELEASE_VERSION" in
                 "16.04") read -p "Instalation requires to run a command to take effect (Command: $post_install). Run now? (y/Y): " -r ;;
                 "20.04") read -p "Instalation requires to run a command to take effect (Command: $focal_post_install). Run now? (y/Y): " -r ;;
-                *) read -p "Instalation requires to run a command to take effect (Command: $post_install). Run now? (y/Y): " -r ;;
+                *) read -p "Instalation requires to run a command to take effect (Command: $focal_post_install). Run now? (y/Y): " -r ;;
             esac
         fi
         if [ $SAY_YES_MODE -eq 1 ] || [[ $REPLY =~ ^[Yy]$ ]]; then
             case "$SYSTEM_RELEASE_VERSION" in
                 "16.04") showVerbose "Running post instalation command '$post_install' " ;;
                 "20.04") showVerbose "Running post instalation command '$focal_post_install' " ;;
-                *) showVerbose "Running post instalation command '$post_install' " ;;
+                *) showVerbose "Running post instalation command '$focal_post_install' " ;;
             esac
             if [ $DEBUG_MODE -eq 0 ]; then
                 case "$SYSTEM_RELEASE_VERSION" in
                     "16.04") eval "$post_install" ;; #FIXME: Can be dangerous
                     "20.04") eval "$focal_post_install" ;; #FIXME: Can be dangerous
-                    *) eval "$post_install" ;; #FIXME: Can be dangerous
+                    *) eval "$focal_post_install" ;; #FIXME: Can be dangerous
                 esac
             fi
         fi
@@ -726,7 +726,7 @@ CFG_FOLDER="components"
 case "$SYSTEM_RELEASE_VERSION" in
     "16.04") BLOCK_OTA_PKG="packages/BlockOTA.jerk" ;;
     "20.04") BLOCK_OTA_PKG="packages/BlockOTA_focal.jerk" ;;
-    *) BLOCK_OTA_PKG="packages/BlockOTA.jerk" ;;
+    *) BLOCK_OTA_PKG="packages/BlockOTA_focal.jerk" ;;
 esac
 
 # Adjust required directories/files depending where script is installed
