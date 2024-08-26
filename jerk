@@ -1,4 +1,6 @@
 #!/bin/bash
+# Set current directory as working directory
+cd "$(dirname "$0")"
 
 # Remount rootfs as read-only when script exits
 trap remountRootfsROIfNecessary EXIT
@@ -11,12 +13,14 @@ FORCE_MODE=0
 SCRIPT_REMOUNTED_ROOTFS=0
 TARGET_COMPONENT_PROVIDED=0
 SAY_YES_MODE=0
+SKIP_POST_INSTALL=0
 INSTALLED_AS_BIN=0
 SYSTEM_RELEASE_VERSION="$(lsb_release -rs)"
 SYSTEM_ARCH="$(uname -m)"
+RAN_AS_SUDO=0
 
 # Constant values
-VERSION="1.0.7"
+VERSION="1.0.8"
 BACKUP_SUFFIX=".JERKORIG"
 ORIG_FOLDERNAME="ORIG"
 MOD_FOLDERNAME="MOD"
@@ -44,6 +48,7 @@ function Help
    echo
    echo "Commands:"
    echo "check          Check if the package is compatible with your system"
+   echo "check-mods     Check if there are Jerk modified files in the provided component"
    echo "install        Install the specified package to your system."
    echo "               Automatically blocks OTA updates"
    echo "reset          Revert all changes in the target path of the specified package or component."
@@ -70,6 +75,7 @@ function Help
    echo "--force, -f       Ignore incompatibilities and force installation"
    echo "--debug, -d       Debug mode. Only log actions and no actual execution"
    echo "--say-yes, -y     Skip all prompts, if any, by saying yes to all"
+   echo "--skip-post, -p  Skil post install commands"
    echo
 }
 
@@ -121,8 +127,9 @@ function checkIfSudo
     if [ "$EUID" -ne 0 ]; then
         showDebug "Running as phablet"
     else
-        echo "Please do NOT run as super user. The script will prompt you for sudo when needed."
-        exit 1
+        showDebug "Running as sudo"
+        RAN_AS_SUDO=1
+        echo "It is advisable to run without sudo. The script will prompt you for sudo password when needed."
     fi
 }
 
@@ -147,7 +154,11 @@ function remountRootfs
 {
     local return_code
 
-    sudo -p "$PASSWORD_PROMPT" mount -o "${1}",remount /
+    if [ $RAN_AS_SUDO -eq 0 ]; then
+        sudo -p "$PASSWORD_PROMPT" mount -o "${1}",remount /
+    else
+        mount -o "${1}",remount /
+    fi
     return_code=$?
 
     return $return_code
@@ -320,7 +331,7 @@ function validateInput
                 exit 1
             fi
         else
-            if [ "$PROCESS_MODE" = "reset" ]; then
+            if [ "$PROCESS_MODE" = "reset" ] || [ "$PROCESS_MODE" = "check-mods" ]; then
                 if [ "$PACKAGE_NAME" = "all" ]; then
                     TARGET_COMPONENT_PROVIDED=1
                     return_code=0
@@ -384,26 +395,28 @@ function validateInput
 # Run post installation command if specified in the package
 function runPostInstall
 {
-    if [[ -v post_install ]]; then
-        if [ $SAY_YES_MODE -eq 0 ]; then
-            case "$SYSTEM_RELEASE_VERSION" in
-                "16.04") read -p "Instalation requires to run a command to take effect (Command: $post_install). Run now? (y/Y): " -r ;;
-                "20.04") read -p "Instalation requires to run a command to take effect (Command: $focal_post_install). Run now? (y/Y): " -r ;;
-                *) read -p "Instalation requires to run a command to take effect (Command: $focal_post_install). Run now? (y/Y): " -r ;;
-            esac
-        fi
-        if [ $SAY_YES_MODE -eq 1 ] || [[ $REPLY =~ ^[Yy]$ ]]; then
-            case "$SYSTEM_RELEASE_VERSION" in
-                "16.04") showVerbose "Running post instalation command '$post_install' " ;;
-                "20.04") showVerbose "Running post instalation command '$focal_post_install' " ;;
-                *) showVerbose "Running post instalation command '$focal_post_install' " ;;
-            esac
-            if [ $DEBUG_MODE -eq 0 ]; then
+    if [ $SKIP_POST_INSTALL -eq 0 ] && [ $RAN_AS_SUDO -eq 0 ]; then
+        if [[ -v post_install ]]; then
+            if [ $SAY_YES_MODE -eq 0 ]; then
                 case "$SYSTEM_RELEASE_VERSION" in
-                    "16.04") eval "$post_install" ;; #FIXME: Can be dangerous
-                    "20.04") eval "$focal_post_install" ;; #FIXME: Can be dangerous
-                    *) eval "$focal_post_install" ;; #FIXME: Can be dangerous
+                    "16.04") read -p "Instalation requires to run a command to take effect (Command: $post_install). Run now? (y/Y): " -r ;;
+                    "20.04") read -p "Instalation requires to run a command to take effect (Command: $focal_post_install). Run now? (y/Y): " -r ;;
+                    *) read -p "Instalation requires to run a command to take effect (Command: $focal_post_install). Run now? (y/Y): " -r ;;
                 esac
+            fi
+            if [ $SAY_YES_MODE -eq 1 ] || [[ $REPLY =~ ^[Yy]$ ]]; then
+                case "$SYSTEM_RELEASE_VERSION" in
+                    "16.04") showVerbose "Running post instalation command '$post_install' " ;;
+                    "20.04") showVerbose "Running post instalation command '$focal_post_install' " ;;
+                    *) showVerbose "Running post instalation command '$focal_post_install' " ;;
+                esac
+                if [ $DEBUG_MODE -eq 0 ]; then
+                    case "$SYSTEM_RELEASE_VERSION" in
+                        "16.04") eval "$post_install" ;; #FIXME: Can be dangerous
+                        "20.04") eval "$focal_post_install" ;; #FIXME: Can be dangerous
+                        *) eval "$focal_post_install" ;; #FIXME: Can be dangerous
+                    esac
+                fi
             fi
         fi
     fi
@@ -606,7 +619,12 @@ function backup_files
             targetFilename="$sourceFilename$BACKUP_SUFFIX"
             showVerbose "Backing up $sourceFilename as $targetFilename"
             if [ $DEBUG_MODE -eq 0 ]; then
-                sudo -p "$PASSWORD_PROMPT" cp $sourceFilename $targetFilename
+                if [ $RAN_AS_SUDO -eq 0 ]; then
+                    sudo -p "$PASSWORD_PROMPT" cp $sourceFilename $targetFilename
+                else
+                    cp $sourceFilename $targetFilename
+                fi
+
                 return_code=$?
             fi
         done
@@ -628,7 +646,12 @@ function install_package
     if [ $? -eq 0 ]; then
         showDebug "***Installing $PACKAGE_NAME***"
         if [ $DEBUG_MODE -eq 0 ]; then
-            sudo -p "$PASSWORD_PROMPT" tar -C ${TARGET_PATH} -xf ${PACKAGE_NAME} ${MOD_FOLDERNAME} --strip-components=1 # Strip top level when extracting
+            if [ $RAN_AS_SUDO -eq 0 ]; then
+                sudo -p "$PASSWORD_PROMPT" tar -C ${TARGET_PATH} -xf ${PACKAGE_NAME} ${MOD_FOLDERNAME} --strip-components=1 # Strip top level when extracting
+            else
+                tar -C ${TARGET_PATH} -xf ${PACKAGE_NAME} ${MOD_FOLDERNAME} --strip-components=1 # Strip top level when extracting
+            fi
+
             return_code=$?
         fi
     else
@@ -653,7 +676,12 @@ function uninstall_package
         sourceFilename="$targetFilename$BACKUP_SUFFIX"
         showVerbose "Restoring $sourceFilename as $targetFilename"
         if [ $DEBUG_MODE -eq 0 ]; then
-            sudo -p "$PASSWORD_PROMPT" mv $sourceFilename $targetFilename
+            if [ $RAN_AS_SUDO -eq 0 ]; then
+                sudo -p "$PASSWORD_PROMPT" mv $sourceFilename $targetFilename
+            else
+                mv $sourceFilename $targetFilename
+            fi
+
             return_code=$?
         fi
     done
@@ -666,10 +694,37 @@ function uninstall_package
         targetFilename=$TARGET_PATH/$file
         showVerbose "Deleting $targetFilename"
         if [ $DEBUG_MODE -eq 0 ]; then
-            sudo -p "$PASSWORD_PROMPT" rm $targetFilename
+            if [ $RAN_AS_SUDO -eq 0 ]; then
+                sudo -p "$PASSWORD_PROMPT" rm $targetFilename
+            else
+                rm $targetFilename
+            fi
+
             return_code=$?
         fi
     done
+
+    return ${return_code}
+}
+
+# Check if component has Jerk modified files
+function check_for_modifications
+{
+    declare -a backupfiles_list
+    local return_code=0
+
+    backupfiles_list=()
+    while IFS=  read -r -d $'\0'; do
+        backupfiles_list+=("$REPLY")
+    done < <(find $1 -name "*${BACKUP_SUFFIX}" -print0)
+
+    if [ ${#backupfiles_list[@]} -eq 0 ]; then
+        echo "No Jerk modifications found"
+        return_code=0
+    else
+        echo "Jerk modifications found: ${#backupfiles_list[@]} files"
+        return_code=1
+    fi
 
     return ${return_code}
 }
@@ -685,7 +740,7 @@ function reset_path
     backupfiles_list=()
     while IFS=  read -r -d $'\0'; do
         backupfiles_list+=("$REPLY")
-    done < <(sudo -p "$PASSWORD_PROMPT" find $1 -name "*${BACKUP_SUFFIX}" -print0)
+    done < <(find $1 -name "*${BACKUP_SUFFIX}" -print0)
 
     if [ ${#backupfiles_list[@]} -eq 0 ]; then
         echo "Nothing to reset"
@@ -697,7 +752,11 @@ function reset_path
             targetFilename=`echo $file | sed "s/"${BACKUP_SUFFIX}"*$//g"`
             showVerbose "Restoring $sourceFilename as $targetFilename"
             if [ $DEBUG_MODE -eq 0 ]; then
-                sudo -p "$PASSWORD_PROMPT" mv $sourceFilename $targetFilename
+                if [ $RAN_AS_SUDO -eq 0 ]; then
+                    sudo -p "$PASSWORD_PROMPT" mv $sourceFilename $targetFilename
+                else
+                    mv $sourceFilename $targetFilename
+                fi
                 return_code=$?
             fi
         done
@@ -717,6 +776,7 @@ for arg in "$@"; do
     "--force")   set -- "$@" "-f" ;;
     "--debug")   set -- "$@" "-d" ;;
     "--say-yes")   set -- "$@" "-y" ;;
+    "--skip-post")   set -- "$@" "-p" ;;
     *)        set -- "$@" "$arg"
   esac
 done
@@ -752,7 +812,7 @@ fi
 
 # Parse short options
 OPTIND=1
-while getopts ":hvVfdy" opt
+while getopts ":hvVfdyp" opt
 do
   case "$opt" in
     "h") Help; exit 0 ;;
@@ -761,6 +821,7 @@ do
     "f") FORCE_MODE=1;;
     "d") DEBUG_MODE=1;;
     "y") SAY_YES_MODE=1;;
+    "p") SKIP_POST_INSTALL=1;;
     "?") badUsage "Error: Invalid option"; exit 1 ;;
   esac
 done
@@ -863,7 +924,7 @@ if [ $? -eq 0 ]; then
                     echo "Installation has been completed successfully"
 
                     runPostInstall # Run post installation command if any
-                    
+
                     showDebug "Blocking OTA updates"
                     if [ $DEBUG_MODE -eq 0 ]; then
                         if [ $INSTALLED_AS_BIN -eq 0 ]; then
@@ -955,6 +1016,36 @@ if [ $? -eq 0 ]; then
                     runPostInstall # Run post installation command if any
                 else
                     echo "Reset failed"
+                fi
+            fi;;
+        "check-mods")
+            if [ "$PACKAGE_NAME" = "all" ]; then
+                packages_to_check=($CFG_FOLDER/*)
+                for package in "${packages_to_check[@]}"
+                do
+                    component_to_check=$(basename $package | sed 's/\.cfg$//') # Only get file name without the extension
+                    echo "Checking $component_to_check"
+                    if [ $DEBUG_MODE -eq 0 ]; then
+                        if [ $INSTALLED_AS_BIN -eq 0 ]; then
+                            ./$SCRIPT check-mods $component_to_check
+                        else
+                            $SCRIPT check-mods $component_to_check
+                        fi
+                    fi
+                done
+
+                if [ $? -eq 0 ]; then
+                    echo "All components were checked successfully"
+                else
+                    echo "Checking all components failed"
+                fi
+            else
+                check_for_modifications $TARGET_PATH
+
+                if [ $? -eq 0 ]; then
+                    exit 0
+                else
+                    exit 1
                 fi
             fi;;
         "describe")
