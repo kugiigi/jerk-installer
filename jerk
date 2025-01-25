@@ -1,6 +1,8 @@
 #!/bin/bash
 # Set current directory as working directory
-cd "$(dirname "$0")"
+#~ Disable for non-Ambot Installer release
+#~ This loses the ability to use relative path to the current folder's files
+#~ cd "$(dirname "$0")"
 
 # Remount rootfs as read-only when script exits
 trap remountRootfsROIfNecessary EXIT
